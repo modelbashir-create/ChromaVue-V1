@@ -21,11 +21,6 @@ Physical patch
 	•	Optional hidden cue (e.g., “CHECK”) revealed when the hue crosses a safety threshold.
 	•	Why visible bands? iPhone sensors are filtered against NIR; the patch spectrally shapes reflected visible light so hemoglobin sensitive bands signal perfusion changes.
 
-iOS acquisition & signal extraction
-	•	Capture discipline: AE/AF/WB lock; portrait-fixed export; optional torch cadence; frame QC (distance/tilt/saturation/motion).
-	•	Normalization: sRGB→linear + WB inverse scaling; per-device calibration profile (JSON).
-	•	Features: map camera RGB → proxies for 555/590/635 nm; compute ratio/Δ features (e.g., log₁₀(R/G), band-pair deltas) → relative StO₂ surrogate and displays sto2 heatmaps. 
-
 ⸻
 
 Modeling & design optimization
