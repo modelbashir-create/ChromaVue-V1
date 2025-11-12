@@ -76,6 +76,6 @@ Why this matters for ischemia
 	•	Human + machine: Blended designs give patients/caregivers an intuitive “looks off” cue; tiled designs give clinicians quantitative trends and exportable research data.
 
 
-  The code displayed here is an early prtotype of the phone app it does not use a MVVM architecture,the reflectence model it self has not been added to the software. I might make physical changes to the patch such as using upconversion pigments to turn IR light into visible light or code it so that instead of 3 bands i can eastimate an IR band.
-  Early MCX simulation show that there is enough signal to noise for the phone sensor to detect change in sto2 from 3cm-10cm away from tissue over the desired range 70% t0 20% sto2. only 7.5% of light will reach the sensor making this an ideal problem for 
-  Machine learning. Many weak signals that follow predictable physics informed behavior. 
+  The code displayed here is an early prtotype of the phone app it does not use a MVVM architecture,the reflectence model itself has not been added to the software. I might make physical changes to the patch such as using upconversion pigments to turn IR light into visible light or estimate an IR reflectence from the 3 wavelngths. 
+  Early MCX simulation show that there is enough signal to noise for the phone sensor to detect change over the desired ranges. Its an ideal problem for ML, many weak signals with predictable physics. 
+
