@@ -1,4 +1,4 @@
-ChromaVue — Visible-band colorimetric patch + iOS app for perfusion/StO₂ monitoring 
+
 
 Quick summary
 
