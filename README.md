@@ -1,81 +1,21 @@
+Summary
 
+ChromaVue tissue perfusion and oxygenation detection, with both human readable color shifts and a numeric absolute StO2 value. The system is aimed at flap and graft ischemia monitoring where early detection matters and expensive monitors are not always available. This is a patient oriented tool developed to be used in cases where sto2 monitoring is not possible with traditional methods. The code shown with this work is an early prototype of the phone app. It does not use an MVVM architecture yet, and the reflectance model has not been added to the software. I may also make physical changes to the patch, for example using upconversion pigments to turn infrared light into visible light or trying to estimate an infrared like reflectance from the three visible wavelengths.
 
-Quick summary
+Methods
 
-ChromaVue explores whether a thin colorimetric skin patch plus a native iOS app can provide stable, low-cost signals related to tissue perfusion/oxygenation (StO₂) with human readable hue shifts and phone read numeric absolute sto2. The system targets flap/graft ischemia monitoring where early detection matters and high-end monitors are not always available.
+The physical patch is built as a stack of three layers: a top polyurethane layer, a central PET layer that holds the pigments, and a bottom polyurethane layer that sits on the skin. This structure is chosen to explore durability and prevent pigments from making contact with skin. The patch pigmented design is limited to the visible range and is meant to work well with the iPhone camera. Narrow band pigments are chosen to measure hemoglobin contrast, using PG7 around 555 nanometers for green, PY154 around 590 nanometers for yellow, and PR122 around 635 nanometers for red. There are two main design patterns. One is a blended field that gives an intuitive, continuous hue shift for the patient or caregiver. The other is a tiled or checkerboard pattern that gives the app more stable sampling areas but it can also show change to the visible eye just not aswell as the other design. At a certein distance a checkered design basically appears as one hue if you look from far enough. The phone is meant to be used from 3cm to 10cm away from tissue. There can also be a hidden cue such as the word "CHECK" that appears when the hue crosses a safety threshold. The bands are all visible because iPhone sensors are filtered against near infrared. Instead of using infrared, the patch shapes the reflected visible light so that changes in hemoglobin and perfusion show up in those three bands.
 
+Models
 
+For modeling and design optimization, the first step is to use MCX, a Monte Carlo light transport tool, to simulate how photons travel through the polyurethane and PET layers and then into and out of skin. The simulations take as inputs skin melanin and hematocrit, dermal thickness, patch geometry, pigment spectra, pigment optical density, whether the design is tiled or blended, and the distance and tilt of the camera. The outputs include reflectance in each of the three bands at 555, 590, and 635 nanometers, how sensitive those bands are to StO2, and the expected camera features after the app applies its normalization steps. MCX provides the underlying physics for a large design space, but it is not practical to run it for every possible pigment and geometry combination. To handle this, a surrogate model is trained with NVIDIA Modulus. This surrogate is meant to copy the MCX forward mapping and quickly predict band reflectance and features from skin parameters, layer structure, pigment density, and pattern choice. The goal is to predict the signal while using knowledge of StO2 reflectance behavior to remove or down weight data that does not follow the expected physics thanks to NVidia Modulus framework. With this NN surrogate in place, it becomes possible to sweep across pigment concentrations, layer thicknesses, and layouts without rerunning MCX for every case which I would do if i had an unlimited computing budget (were using google cloud and some pre-modling on my RTX 2070 Super).
 
-Methods 
+NVIDIA Physics NeMo is then used to treat the design problem as an inverse or search problem. In this step, the design variables include pigment concentrations and optical densities, pigment mix ratios, whether the pattern is tiled or blended, layer thicknesses, and optional extra layers such as a titanium dioxide reflector under the pigments (this helps with contrast, its does not absorb light it refracts it). The objectives are to match a target StO2 response curve that is monotonic and sensitive across the clinical range of interest, to create a hue change that is visible to the human eye in the blended design, and to maintain stable numeric separability in the tiled design so i can extract scalar float and rgb float. Another goal is robustness to skin tone, skin thickness, and capture distance or tilt, by penalizing designs that are too sensitive to these factors. Physics NeMo drives surrogate and sends the best candidates back to MCX for more detailed checks probably will use Optuna have not decided. The optical density of each pigment, and their mix ratios, are adjusted to shape how the combined three band response changes with StO2.The top designs are then re simulated in MCX with higher photon counts. 
 
-Physical patch
-	•	Layer stack: PU (top) / PET (pigment layer) / PU (skin-contact) for durability and biocompatibility exploration.
-	•	Spectral design (visible only, iPhone-friendly): narrow-band pigments chosen to measure hemoglobin contrast:
-	•	PG7 (≈ 555 nm, green)
-	•	PY154 (≈ 590 nm, yellow)
-	•	PR122 (≈ ~635 nm, red)
-	•	Design Patterns:
-  Two types 
-	•	Blended field for intuitive, continuous hue shift (patient-facing).
-	•	Tiled/checkerboard for robust app sampling and QC (research/clinician-facing).
-	•	Optional hidden cue (e.g., “CHECK”) revealed when the hue crosses a safety threshold.
-	•	Why visible bands? iPhone sensors are filtered against NIR; the patch spectrally shapes reflected visible light so hemoglobin sensitive bands signal perfusion changes.
+Validation
 
-⸻
+For synthetic to real validation, NVIDIA Omniverse is used as a sandbox. The chosen patch designs are placed on virtual skin in physically based scenes and exposed to different room lighting conditions, different device distances and angles, motion blur, and differences between iPhone models (not sure how to do this, will try to get accurate information about iphone sensors). The appearance of the patch on skin is rendered using predicted behavior and those images are passed through the same iOS processing steps that the real app uses, including quality checks and normalization, to see how reprducible the results are. This is used to reduce the number of benchtop and human tests needed and to reduce the risk in user interface and capture choices. If I am bold enough or if the renderings look very good from a few test cases i might even have Omniverse generate synthetic photos and back train my NN surrgate I am unsure if this would reinforce bad behaviors since the rendering is derviced fromt he surrogate in the first place. Early MCX simulations show that there is enough signal to noise for the phone sensor to detect changes over the desired ranges. This makes the problem well suited to machine learning because there are many weak signals that still follow predictable physics. There is ChromaVue 3 version I am working. 
 
-Modeling & design optimization
+Beyond Chroma vue 
 
-1) MCX (Monte-Carlo eXtreme) forward light transport
-
-We simulate photon transport through PU–PET–PU + skin to predict how pigment optics and tissue parameters shape the captured signal.
-	•	Inputs: skin melanin/hematocrit, dermal thickness, patch geometry, pigment spectra, optical densities (OD), tiling vs blended patterns, distance/tilt.
-	•	Outputs: band-wise reflectance at 555/590/635 nm, sensitivity to StO₂, and expected camera space features after the app’s normalization steps.
-
-MCX gives ground truth physics for a large design space, but brute forcing every pigment and geometry combo is impossible with limited resources (unlimited computing budget). That’s where surrogates come in.
-
-2) NVIDIA Modulus (physics-informed surrogate)
-
-We train a surrogate model to emulate the MCX forward mapping:
-	•	Goal: predict band reflectance/features from (skin params, layer stack, pigment OD, pattern) quickly, with physics aware regularization of data (basically remove data that does not follow the known physics of sto2 reflectence) 
-	•	Use: enables fast sweeps across pigment concentrations, layer thicknesses, and layouts without re-running MCX each time. 
-
-3) NVIDIA Physics NeMo (inverse/design search)
-
-We frame design as an optimization/inverse problem:
-	•	Design variables: pigment concentrations/OD, pigment mix ratios, patterning (tile vs blend), layer thickness, optional under-layers (e.g., TiO₂ reflector).
-	•	Objective(s): match a target StO₂ response curve:
-	•	Monotonic and sensitive across the clinical StO₂ range of interest.
-	•	Human-visible hue change for the blended design and stable numeric separability for the tiled design.
-	•	Robustness to skin tone, thickness, distance/tilt (penalize designs that are overly sensitive to nuisance factors).
-	•	Engine: Physics NeMo drives gradient-based or Bayesian search on top of the Modulus surrogate, with spot MCX re-checks for top candidates.
-
-4) Pigment concentration tuning to hit a desired StO₂ curve
-
-we sweep/optimize:
-	•	Per pigment OD (PG7/PY154/PR122) and mix ratios to shape the triplet (555/590/635) response vs StO₂.
-	•	Patterning (tile pitch vs blend kernel) to balance human perception and camera feature stability.
-	•	Layer thicknesses (PU/PET/PU) and optional under layers (e.g., TiO₂) to boost SNR or linearize response.
-For each candidate, we evaluate:
-	•	Curve fidelity: error to the target StO₂ transfer curve. 
-	•	Sensitivity: d(feature)/d(StO₂) where it matters clinically.
-	•	Robustness: variance across skin tones, distances, and angles.
-Top designs are then re-simulated in MCX at higher photon counts and promoted to validation.
-
-5) NVIDIA Omniverse (synthetic-to-real validation sandbox)
-
-We place the chosen patch designs into physically based scenes to test capture robustness before human/phantom work:
-	•	Scenarios: different OR/ward lighting, device distances/angles, motion blur, iPhone model variations.
-	•	Assets: render photoreal patch-on-skin views using the surrogate-predicted appearance; feed these images back through the actual iOS pipeline (QC + normalization) to measure end-to-end stability.
-	•	Purpose: cut down on benchtop/human iterations and de-risk UI/capture choices.
-
-⸻
-
-Why this matters for ischemia
-	•	Early signal: Colorimetric amplification at hemoglobin-sensitive bands can reveal perfusion changes before overt visual cues.
-	•	Low friction: A thin patch + smartphone fits bedside and post-discharge workflows.
-	•	Human + machine: Blended designs give patients/caregivers an intuitive “looks off” cue; tiled designs give clinicians quantitative trends and exportable research data.
-
-
-  The code displayed here is an early prtotype of the phone app it does not use a MVVM architecture,the reflectence model itself has not been added to the software. I might make physical changes to the patch such as using upconversion pigments to turn IR light into visible light or estimate an IR reflectence from the 3 wavelngths. 
-  Early MCX simulation show that there is enough signal to noise for the phone sensor to detect change over the desired ranges. Its an ideal problem for ML, many weak signals with predictable physics. 
-
+This same codebase can be reused to create any type of machine learning app on ios. The framework is the same. replace or edit chromacameramanger and tell it where your sensory data is coming from. send that of to analysis manger where you can do transformations or basic math to get your data ready for your model. Plug in your trained model in modelmanger. edit the heatmap shaders and rendering file and tell it how you want the data displayed. 
